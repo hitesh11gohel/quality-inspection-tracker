@@ -43,6 +43,7 @@ export interface ApiResponse<T> {
 }
 
 export interface InspectionFilters {
+  search?: string;
   severity?: Severity;
   status?: Status;
   dateFrom?: string;
