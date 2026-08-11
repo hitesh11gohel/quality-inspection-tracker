@@ -66,6 +66,14 @@ export const inspectionService = {
     return res.data.data;
   },
 
+  /** Hard-delete an inspection (admin only — server enforces 403 for non-admins) */
+  async deleteInspection(id: number): Promise<void> {
+    const res = await api.delete<ApiResponse<null>>(`/inspections/${id}`);
+    if (!res.data.success) {
+      throw new Error(res.data.error ?? 'Failed to delete inspection');
+    }
+  },
+
   /** Fetch aggregated summary statistics for the dashboard */
   async getSummary(): Promise<SummaryStats> {
     const res = await api.get<ApiResponse<SummaryStats>>('/summary');

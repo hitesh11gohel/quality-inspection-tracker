@@ -6,15 +6,16 @@
  *  - findById : single record lookup
  *  - create   : insert a new Open inspection
  *  - resolve  : mark an inspection as Resolved with a resolution note
+ *  - remove   : hard-delete a record (admin-only, enforced in controller)
  *
- * All methods return typed Inspection objects (from @qit/shared) rather than
- * raw DB rows, so controllers never deal with the database shape directly.
+ * findAll and findById JOIN the users table so each row includes
+ * createdByUsername, avoiding a second query in the controller.
  */
 
 import type { Inspection } from "@qit/shared";
 import { db } from "../db/database";
 
-/** Raw row shape as stored in the inspections table */
+/** Raw row shape returned by queries that JOIN users */
 interface DbRow {
   id: number;
   date: string;
@@ -26,6 +27,7 @@ interface DbRow {
   resolutionNote: string | null;
   resolvedAt: string | null;
   createdBy: number | null;
+  createdByUsername: string | null; // from LEFT JOIN users
   createdAt: string;
   updatedAt: string;
 }
@@ -53,19 +55,17 @@ interface CreateData {
   createdBy: number; // id of the authenticated user submitting the record
 }
 
-// Whitelist of columns that are safe to interpolate into ORDER BY.
-// Validated against user input in InspectionController to prevent SQL injection.
+// Qualify column names with the table alias to avoid ambiguity after the JOIN
+// (both inspections and users have id and createdAt columns).
 const SORT_COLS: Record<string, string> = {
-  date: "date",
-  severity: "severity",
-  createdAt: "createdAt",
+  date:      "i.date",
+  severity:  "i.severity",
+  createdAt: "i.createdAt",
 };
 
-/**
- * Converts a raw DB row into the typed Inspection shape.
- * Optional fields (remarks, resolutionNote, etc.) are omitted from the object
- * entirely when null rather than being set to undefined.
- */
+/** The JOIN fragment reused across every SELECT that returns full rows */
+const FROM_JOIN = `FROM inspections i LEFT JOIN users u ON i.createdBy = u.id`;
+
 function toInspection(row: DbRow): Inspection {
   return {
     id: row.id,
@@ -74,10 +74,11 @@ function toInspection(row: DbRow): Inspection {
     defectType: row.defectType as Inspection["defectType"],
     severity: row.severity as Inspection["severity"],
     status: row.status as Inspection["status"],
-    ...(row.remarks        != null && { remarks: row.remarks }),
-    ...(row.resolutionNote != null && { resolutionNote: row.resolutionNote }),
-    ...(row.resolvedAt     != null && { resolvedAt: row.resolvedAt }),
-    ...(row.createdBy      != null && { createdBy: row.createdBy }),
+    ...(row.remarks            != null && { remarks: row.remarks }),
+    ...(row.resolutionNote     != null && { resolutionNote: row.resolutionNote }),
+    ...(row.resolvedAt         != null && { resolvedAt: row.resolvedAt }),
+    ...(row.createdBy          != null && { createdBy: row.createdBy }),
+    ...(row.createdByUsername  != null && { createdByUsername: row.createdByUsername }),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -90,6 +91,9 @@ export const InspectionModel = {
    * The WHERE clause is built dynamically — only filters that are actually
    * provided are added, so an empty body returns all records.
    * A separate COUNT query runs first so the frontend knows the total pages.
+   *
+   * Column names in WHERE conditions are unambiguous (no user-table overlap)
+   * so no table prefix is needed there; ORDER BY uses qualified i.* names.
    */
   async findAll(filters: ListFilters) {
     const { search, severity, status, dateFrom, dateTo, page, limit, sortBy, sortOrder } = filters;
@@ -98,30 +102,29 @@ export const InspectionModel = {
     const args: (string | number)[] = [];
 
     if (search) {
-      // Wrap search term in % wildcards for a contains match across three columns
       const term = `%${search}%`;
-      conditions.push("(machineLineId LIKE ? OR remarks LIKE ? OR defectType LIKE ?)");
+      conditions.push("(i.machineLineId LIKE ? OR i.remarks LIKE ? OR i.defectType LIKE ?)");
       args.push(term, term, term);
     }
-    if (severity) { conditions.push("severity = ?"); args.push(severity); }
-    if (status)   { conditions.push("status = ?");   args.push(status); }
-    if (dateFrom) { conditions.push("date >= ?");     args.push(dateFrom); }
-    if (dateTo)   { conditions.push("date <= ?");     args.push(dateTo); }
+    if (severity) { conditions.push("i.severity = ?"); args.push(severity); }
+    if (status)   { conditions.push("i.status = ?");   args.push(status); }
+    if (dateFrom) { conditions.push("i.date >= ?");     args.push(dateFrom); }
+    if (dateTo)   { conditions.push("i.date <= ?");     args.push(dateTo); }
 
     const where  = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    const col    = SORT_COLS[sortBy] ?? "createdAt"; // fallback guards against unknown sortBy
+    const col    = SORT_COLS[sortBy] ?? "i.createdAt";
     const order  = `ORDER BY ${col} ${sortOrder === "asc" ? "ASC" : "DESC"}`;
     const offset = (page - 1) * limit;
 
-    // Run count query first so frontend can calculate total pages
+    // Count on inspections alone (no user columns in WHERE, JOIN unnecessary)
     const countResult = await db.execute({
-      sql: `SELECT COUNT(*) as count FROM inspections ${where}`,
+      sql:  `SELECT COUNT(*) as count FROM inspections i ${where}`,
       args,
     });
     const total = Number(countResult.rows[0].count);
 
     const listResult = await db.execute({
-      sql:  `SELECT * FROM inspections ${where} ${order} LIMIT ? OFFSET ?`,
+      sql:  `SELECT i.*, u.username AS createdByUsername ${FROM_JOIN} ${where} ${order} LIMIT ? OFFSET ?`,
       args: [...args, limit, offset],
     });
 
@@ -133,10 +136,10 @@ export const InspectionModel = {
     };
   },
 
-  /** Fetch a single inspection by id, or null if it does not exist */
+  /** Fetch a single inspection by id (includes createdByUsername), or null if not found */
   async findById(id: string | number): Promise<Inspection | null> {
     const result = await db.execute({
-      sql:  "SELECT * FROM inspections WHERE id = ?",
+      sql:  `SELECT i.*, u.username AS createdByUsername ${FROM_JOIN} WHERE i.id = ?`,
       args: [id],
     });
     return result.rows.length > 0
@@ -146,8 +149,8 @@ export const InspectionModel = {
 
   /**
    * Insert a new inspection with status defaulting to 'Open'.
-   * Fetches and returns the full row after insert so the response
-   * includes auto-generated fields (id, createdAt, updatedAt).
+   * Fetches and returns the full row (with JOIN) after insert so the response
+   * includes auto-generated fields (id, createdAt, updatedAt) and username.
    */
   async create(data: CreateData): Promise<Inspection> {
     const now = new Date().toISOString();
@@ -160,7 +163,7 @@ export const InspectionModel = {
     });
 
     const fetched = await db.execute({
-      sql:  "SELECT * FROM inspections WHERE id = ?",
+      sql:  `SELECT i.*, u.username AS createdByUsername ${FROM_JOIN} WHERE i.id = ?`,
       args: [Number(result.lastInsertRowid)],
     });
     return toInspection(fetched.rows[0] as unknown as DbRow);
@@ -168,7 +171,7 @@ export const InspectionModel = {
 
   /**
    * Mark an inspection as Resolved and record the resolution note + timestamp.
-   * Returns null if the inspection id does not exist (caller sends 404).
+   * Returns null if the inspection id does not exist.
    */
   async resolve(id: string | number, resolutionNote: string): Promise<Inspection | null> {
     const existing = await db.execute({
@@ -186,9 +189,28 @@ export const InspectionModel = {
     });
 
     const updated = await db.execute({
-      sql:  "SELECT * FROM inspections WHERE id = ?",
+      sql:  `SELECT i.*, u.username AS createdByUsername ${FROM_JOIN} WHERE i.id = ?`,
       args: [id],
     });
     return toInspection(updated.rows[0] as unknown as DbRow);
+  },
+
+  /**
+   * Hard-delete an inspection record.
+   * Authorization (admin-only) is enforced in the controller before this is called.
+   * Returns false if the record did not exist.
+   */
+  async remove(id: string | number): Promise<boolean> {
+    const existing = await db.execute({
+      sql:  "SELECT id FROM inspections WHERE id = ?",
+      args: [id],
+    });
+    if (existing.rows.length === 0) return false;
+
+    await db.execute({
+      sql:  "DELETE FROM inspections WHERE id = ?",
+      args: [id],
+    });
+    return true;
   },
 };

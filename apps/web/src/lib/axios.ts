@@ -16,7 +16,7 @@ const api = axios.create({
 // Attach the JWT stored in localStorage to every outgoing request.
 // The token is written to localStorage by the login flow.
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('qit_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -30,8 +30,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('qit_token');
+      localStorage.removeItem('qit_user');
       window.location.href = '/login';
     }
     return Promise.reject(error);

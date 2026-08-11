@@ -83,6 +83,18 @@ export const resolveInspection = createAsyncThunk(
   }
 );
 
+export const deleteInspection = createAsyncThunk(
+  'inspections/delete',
+  async (id: number, { rejectWithValue }) => {
+    try {
+      await inspectionService.deleteInspection(id);
+      return id;
+    } catch (err) {
+      return rejectWithValue((err as Error).message);
+    }
+  }
+);
+
 // ── Slice ─────────────────────────────────────────────────────────────────────
 
 const inspectionsSlice = createSlice({
@@ -142,6 +154,22 @@ const inspectionsSlice = createSlice({
         if (idx !== -1) state.items[idx] = action.payload;
       })
       .addCase(resolveInspection.rejected, (state, action) => {
+        state.isSubmitting = false;
+        state.error        = action.payload as string;
+      });
+
+    // ── deleteInspection ──
+    builder
+      .addCase(deleteInspection.pending, (state) => {
+        state.isSubmitting = true;
+        state.error        = null;
+      })
+      .addCase(deleteInspection.fulfilled, (state, action) => {
+        state.isSubmitting = false;
+        state.items  = state.items.filter((i) => i.id !== action.payload);
+        state.total  = Math.max(0, state.total - 1);
+      })
+      .addCase(deleteInspection.rejected, (state, action) => {
         state.isSubmitting = false;
         state.error        = action.payload as string;
       });

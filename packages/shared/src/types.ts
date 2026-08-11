@@ -17,10 +17,11 @@ export interface Inspection {
   status: Status;
   remarks?: string;
   resolutionNote?: string;
-  resolvedAt?: string;    // ISO timestamp
-  createdAt: string;      // ISO timestamp
-  updatedAt: string;      // ISO timestamp
-  createdBy?: number;     // user id
+  resolvedAt?: string;        // ISO timestamp
+  createdBy?: number;         // user id
+  createdByUsername?: string; // joined from users table
+  createdAt: string;          // ISO timestamp
+  updatedAt: string;          // ISO timestamp
 }
 
 export interface User {
