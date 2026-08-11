@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\hites\\\\OneDrive\\\\Documents\\\\Demo Apps\\\\quality-inspection-tracker\" -Recurse -File | Where-Object { $_.FullName -notmatch '\\(node_modules|dist|\\\\.git\\)' } | ForEach-Object { $_.FullName } | Sort-Object)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\hites\\\\OneDrive\\\\Documents\\\\Demo Apps\\\\quality-inspection-tracker\" -Recurse -Depth 2)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)"
+    ]
+  }
+}
