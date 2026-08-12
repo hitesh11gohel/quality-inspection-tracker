@@ -5,7 +5,7 @@ import { LogDialogContext } from "@/lib/LogDialogContext";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { logoutAction } from "@/store/slices/authSlice";
-import { LogOut, Scissors, ShieldCheck, User } from "lucide-react";
+import { ClipboardList, LayoutDashboard, LogOut, Plus, Scissors, ShieldCheck, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
@@ -161,9 +161,46 @@ export default function AppLayout() {
         </header>
 
         {/* ── Page content ───────────────────────────────────────────────── */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-16 sm:pb-0">
           <Outlet />
         </main>
+
+        {/* ── Bottom nav (mobile only) ────────────────────────────────────── */}
+        <nav className="fixed bottom-0 inset-x-0 z-40 flex h-16 items-stretch border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:hidden">
+          <Link
+            to="/dashboard"
+            className={cn(
+              "flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
+              isActive("/dashboard") ? "text-primary" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <LayoutDashboard className="h-5 w-5" />
+            Dashboard
+          </Link>
+
+          <button
+            type="button"
+            onClick={openLogDialog}
+            aria-label="Log new inspection"
+            className="flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium text-primary transition-colors hover:text-primary/80"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow">
+              <Plus className="h-5 w-5" />
+            </span>
+            Log
+          </button>
+
+          <Link
+            to="/inspections"
+            className={cn(
+              "flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
+              isActive("/inspections") ? "text-primary" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <ClipboardList className="h-5 w-5" />
+            Inspections
+          </Link>
+        </nav>
 
         <LogInspectionDialog
           open={logDialogOpen}

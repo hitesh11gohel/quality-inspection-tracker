@@ -36,12 +36,31 @@ pnpm dev
 
 ### Demo credentials
 
-The database seeds two accounts on first run:
+The database seeds one account on first run. Register additional accounts via the UI or API.
 
-| Username  | Password   | Role       |
-|-----------|------------|------------|
-| `admin`   | `admin123` | Admin      |
-| `user1`   | `user123`  | Supervisor |
+| Username     | Password      | Role       |
+|--------------|---------------|------------|
+| `supervisor` | `password123` | Supervisor |
+
+To create an admin account, register via `POST /api/auth/register` with `"role": "admin"`, or promote an existing user from the **Manage Users** page once an admin account exists.
+
+---
+
+## Features
+
+### Core
+- **Log inspections** — date, machine/line ID, defect type, severity, optional remarks; accessible from any page via the quick-log button
+- **Inspections list** — sortable, filterable by severity, status (Open/Resolved), date range, and free-text machine search; paginated
+- **Resolve inspections** — mark as Resolved with a mandatory resolution note
+- **Summary dashboard** — KPI cards and a severity breakdown showing Open vs Resolved counts
+
+### User management (beyond the original spec)
+- **Profile page** — any logged-in user can update their own username via a modal
+- **Manage Users page** (admin only) — view all users and change any user's role via an inline selector
+
+### Auth
+- JWT-based authentication (24 h tokens); two roles: `supervisor` and `admin`
+- Admin role restricts: user listing, role changes, and inspection deletion
 
 ---
 
@@ -61,11 +80,11 @@ Inspection filters (severity, status, date range, search, sort) are shared acros
 
 ### 4. Mobile-first bottom-nav pattern
 
-Supervisors log defects on the shop floor using their phones. The bottom navigation bar keeps all primary actions reachable with one thumb, and the compact card layout prioritises the most critical information (severity, status) at a glance. The layout progressively enhances to a sidebar on tablet/desktop so admin users at a desk also get a comfortable experience.
+Supervisors log defects on the shop floor using their phones. A persistent bottom navigation bar (Dashboard, Log, Inspections) keeps all primary actions reachable with one thumb, and the compact card layout prioritises the most critical information (severity, status) at a glance. On tablet and desktop the bottom nav is hidden and navigation moves to the sticky top header, where a Log Inspection button appears inline with the page title.
 
 ### 5. JWT over session auth
 
-JWTs are stateless — the server does not need to store or look up session records. This keeps the API horizontally scalable (add more Node processes without a shared session store) and removes a dependency on Redis or a sessions table. The short-lived access token is stored in memory (Redux state) so it is cleared on page reload, which is an acceptable trade-off for an internal tool where users are always on trusted devices.
+JWTs are stateless — the server does not need to store or look up session records. This keeps the API horizontally scalable (add more Node processes without a shared session store) and removes a dependency on Redis or a sessions table. The short-lived access token is stored in Redux state and localStorage so it survives a page refresh while remaining easy to clear on logout — an acceptable trade-off for an internal tool where users are on trusted devices.
 
 ---
 
@@ -73,31 +92,50 @@ JWTs are stateless — the server does not need to store or look up session reco
 
 All endpoints are prefixed with `/api`. Protected routes require an `Authorization: Bearer <token>` header.
 
-| Method | Path                       | Auth | Description                                      |
-|--------|----------------------------|------|--------------------------------------------------|
-| POST   | `/api/auth/login`          | No   | Authenticate with username + password; returns JWT |
-| POST   | `/api/auth/register`       | No   | Create a new supervisor account                  |
-| GET    | `/api/auth/me`             | Yes  | Return the current authenticated user            |
-| GET    | `/api/inspections`         | Yes  | List inspections (filterable, paginated, sortable) |
-| POST   | `/api/inspections`         | Yes  | Create a new inspection record                   |
-| GET    | `/api/inspections/:id`     | Yes  | Fetch a single inspection by ID                  |
-| PATCH  | `/api/inspections/:id`     | Yes  | Update an inspection (e.g. resolve it)           |
-| DELETE | `/api/inspections/:id`     | Yes  | Delete an inspection (admin only)                |
-| GET    | `/api/summary`             | Yes  | Aggregate stats: totals, open/resolved by severity |
+### Auth
+
+| Method | Path                  | Auth | Description                                        |
+|--------|-----------------------|------|----------------------------------------------------|
+| POST   | `/api/auth/register`  | No   | Create a new account (`supervisor` or `admin` role) |
+| POST   | `/api/auth/login`     | No   | Authenticate; returns a signed JWT and user object  |
+
+### Inspections
+
+| Method | Path                    | Auth          | Description                                        |
+|--------|-------------------------|---------------|----------------------------------------------------|
+| GET    | `/api/inspections`      | Any           | List inspections (filterable, paginated, sortable)  |
+| POST   | `/api/inspections`      | Any           | Create a new inspection record                     |
+| GET    | `/api/inspections/:id`  | Any           | Fetch a single inspection by ID                    |
+| PATCH  | `/api/inspections/:id`  | Any           | Update an inspection (e.g. resolve it)             |
+| DELETE | `/api/inspections/:id`  | Admin only    | Delete an inspection                               |
+
+### Summary
+
+| Method | Path           | Auth | Description                                        |
+|--------|----------------|------|----------------------------------------------------|
+| GET    | `/api/summary` | Any  | Aggregate stats: totals, open/resolved by severity |
+
+### Users
+
+| Method | Path                    | Auth       | Description                          |
+|--------|-------------------------|------------|--------------------------------------|
+| GET    | `/api/users`            | Admin only | List all users (no password hashes)  |
+| PUT    | `/api/users/me`         | Any        | Update the authenticated user's username |
+| PUT    | `/api/users/:id/role`   | Admin only | Change any user's role               |
 
 ### Query parameters for `GET /api/inspections`
 
-| Param      | Type                               | Description               |
-|------------|------------------------------------|---------------------------|
-| `search`   | string                             | Filter by machine line ID |
-| `severity` | `Critical` \| `Major` \| `Minor`  | Filter by severity        |
-| `status`   | `Open` \| `Resolved`              | Filter by status          |
-| `dateFrom` | `YYYY-MM-DD`                       | Start of date range       |
-| `dateTo`   | `YYYY-MM-DD`                       | End of date range         |
-| `sortBy`   | `date` \| `severity` \| `createdAt` | Sort field              |
-| `sortOrder`| `asc` \| `desc`                   | Sort direction            |
-| `page`     | number                             | Page number (default: 1)  |
-| `limit`    | number                             | Results per page (default: 20) |
+| Param       | Type                                  | Description                      |
+|-------------|---------------------------------------|----------------------------------|
+| `search`    | string                                | Filter by machine line ID        |
+| `severity`  | `Critical` \| `Major` \| `Minor`     | Filter by severity               |
+| `status`    | `Open` \| `Resolved`                 | Filter by status                 |
+| `dateFrom`  | `YYYY-MM-DD`                          | Start of date range              |
+| `dateTo`    | `YYYY-MM-DD`                          | End of date range                |
+| `sortBy`    | `date` \| `severity` \| `createdAt`  | Sort field                       |
+| `sortOrder` | `asc` \| `desc`                       | Sort direction                   |
+| `page`      | number                                | Page number (default: 1)         |
+| `limit`     | number                                | Results per page (default: 20)   |
 
 ---
 
@@ -108,11 +146,11 @@ quality-inspection-tracker/
 ├── apps/
 │   ├── api/                        # Express + TypeScript backend
 │   │   ├── src/
-│   │   │   ├── controllers/        # Request handlers (auth, inspections, summary)
+│   │   │   ├── controllers/        # Request handlers (auth, inspections, summary, users)
 │   │   │   ├── routes/             # Express route definitions
 │   │   │   ├── models/             # Database query functions
 │   │   │   ├── db/                 # DB client, migrations, seed data
-│   │   │   ├── middleware/         # JWT auth guard, error handler
+│   │   │   ├── middleware/         # JWT auth guard, admin-only guard, error handler
 │   │   │   └── index.ts            # Server entry point
 │   │   └── .env.example
 │   │
@@ -121,10 +159,14 @@ quality-inspection-tracker/
 │       │   ├── components/
 │       │   │   ├── ui/             # Shadcn/Radix primitive components
 │       │   │   ├── layout/         # AppLayout, ProtectedRoute
-│       │   │   └── inspections/    # Feature-specific components (ResolveDialog)
-│       │   ├── pages/              # One file per route (Dashboard, Log, List, Detail, Profile)
+│       │   │   └── inspections/    # LogInspectionDialog, ResolveDialog
+│       │   ├── constants/          # Shared filter/sort options, date presets
+│       │   ├── pages/
+│       │   │   ├── admin/          # ManageUsersPage (admin only)
+│       │   │   ├── auth/           # LoginPage, RegisterPage
+│       │   │   └── ...             # Dashboard, Inspections, Detail, Profile
 │       │   ├── store/              # Redux store + slices (auth, inspections, summary)
-│       │   ├── services/           # Axios API wrappers
+│       │   ├── services/           # Axios API wrappers (auth, inspections, users)
 │       │   └── lib/                # Utilities (severity colours, date formatting)
 │       └── .env.example
 │
@@ -143,7 +185,7 @@ quality-inspection-tracker/
 
 ## What I Would Do Differently With More Time
 
-- **Real-time updates via WebSocket** — right now the dashboard polls every 60 seconds. A Socket.io or native WebSocket connection would push defect events to all connected supervisors instantly, which matters when a critical defect is logged on the floor.
+- **Real-time updates via WebSocket** — right now the dashboard refreshes summary stats every 60 seconds via polling. A Socket.io or native WebSocket connection would push defect events to all connected supervisors instantly, which matters when a critical defect is logged on the floor.
 
 - **Photo attachments for defects** — supervisors should be able to attach a photo of the defect at the time of logging. This would require an object-storage integration (S3-compatible) and a `photos` table linked to inspections.
 
@@ -151,7 +193,7 @@ quality-inspection-tracker/
 
 - **Proper test suite** — the application has no automated tests. I would add Vitest + React Testing Library for component tests, Supertest for API integration tests against a real (in-memory) SQLite instance, and Playwright for critical end-to-end flows (login → log inspection → resolve).
 
-- **PostgreSQL migration for multi-plant scale** — SQLite is perfect for a single embedded deployment, but a larger organisation with multiple plants sharing one API server would need a proper client-server database. The libsql client API is already compatible with Turso (distributed SQLite) or can be swapped for pg with minimal model-layer changes.
+- **PostgreSQL migration for multi-plant scale** — SQLite is perfect for a single embedded deployment, but a larger organisation with multiple plants sharing one API server would need a proper client-server database. The libsql client API is already compatible with Turso (distributed SQLite) or can be swapped for `pg` with minimal model-layer changes.
 
 ---
 
@@ -160,8 +202,9 @@ quality-inspection-tracker/
 | Ambiguity | Resolution |
 |-----------|------------|
 | **Authentication scope** | Only supervisors and admins are modelled. No guest/read-only role was specified, so all routes require a valid JWT. |
-| **Delete permissions** | The spec did not define who can delete inspections. I restricted DELETE to the `admin` role to prevent accidental data loss by supervisors. |
+| **Delete permissions** | The spec did not define who can delete inspections. Restricted DELETE to the `admin` role to prevent accidental data loss by supervisors. |
 | **Defect types** | The list (`Weave Defect`, `Shade Variation`, `Hole/Tear`, `Count Deviation`, `Other`) was inferred from the domain context of textile manufacturing. |
-| **Resolution workflow** | Resolving an inspection requires a `resolutionNote`. This is enforced on the frontend but not at the database level, keeping the schema flexible. |
+| **Resolution workflow** | Resolving an inspection requires a `resolutionNote`. Enforced on the frontend; the database allows null to keep the schema flexible for bulk imports. |
 | **Date storage** | Inspection `date` stores a `YYYY-MM-DD` string (the day the defect was found), while `createdAt`/`updatedAt` are full ISO timestamps. |
 | **Pagination default** | API defaults to 20 results per page. The dashboard fetches the 5 most recent for the preview list. |
+| **User management** | The spec listed auth as a bonus feature with no detail on user administration. Added self-service username update and an admin-only role management page as practical necessities for a real internal tool. |

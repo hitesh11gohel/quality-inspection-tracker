@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardList,
-  Plus,
   PlusCircle,
   TrendingUp,
 } from "lucide-react";
@@ -246,12 +245,13 @@ export default function DashboardPage() {
             {criticalOpen} critical {criticalOpen === 1 ? "issue" : "issues"}{" "}
             still open — requires immediate attention.
           </p>
-          <Link
-            to="/inspections"
+          <button
+            type="button"
+            onClick={() => goToInspections({ severity: "Critical", status: "Open" })}
             className="shrink-0 text-xs font-semibold text-red-700 hover:underline"
           >
             Review →
-          </Link>
+          </button>
         </div>
       )}
 
@@ -475,15 +475,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Mobile FAB ───────────────────────────────────────────────────── */}
-      <button
-        type="button"
-        onClick={openLogDialog}
-        aria-label="Log new inspection"
-        className="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 sm:hidden"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
     </div>
   );
 }
