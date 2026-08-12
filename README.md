@@ -1,4 +1,4 @@
-# Quality Inspection Tracker
+# QualyTrack
 
 A full-stack monorepo application for logging, tracking, and resolving fabric-production defects across machine lines. Built for shop-floor supervisors who need a fast, mobile-friendly tool and for admins who need at-a-glance quality metrics.
 
@@ -15,7 +15,7 @@ A full-stack monorepo application for logging, tracking, and resolving fabric-pr
 
 ```bash
 # 1. Clone the repo
-git clone <repo-url>
+git clone https://github.com/hitesh11gohel/quality-inspection-tracker.git
 cd quality-inspection-tracker
 
 # 2. Install all workspace dependencies
