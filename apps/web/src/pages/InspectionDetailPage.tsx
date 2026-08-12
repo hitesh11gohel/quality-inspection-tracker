@@ -1,34 +1,39 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Clock, AlertTriangle, Trash2, Loader2 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
-import type { Inspection, Severity, Status } from '@qit/shared';
-import { useAppDispatch, useAppSelector } from '@/store';
-import { deleteInspection } from '@/store/slices/inspectionsSlice';
-import { inspectionService } from '@/services/inspectionService';
-import { useToast } from '@/components/ui/use-toast';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import ResolveDialog from '@/components/inspections/ResolveDialog';
-import { cn } from '@/lib/utils';
-
-// ── Style maps ────────────────────────────────────────────────────────────────
-
-const severityBadge: Record<Severity, string> = {
-  Critical: 'bg-red-100 text-red-700 border border-red-200',
-  Major:    'bg-amber-100 text-amber-700 border border-amber-200',
-  Minor:    'bg-green-100 text-green-700 border border-green-200',
-};
-
-const statusBadge: Record<Status, string> = {
-  Open:     'border border-blue-400 text-blue-600',
-  Resolved: 'bg-green-500 text-white',
-};
+import ResolveDialog from "@/components/inspections/ResolveDialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/use-toast";
+import {
+  REMARKS_LIMIT,
+  SEVERITY_BADGE,
+  STATUS_BADGE,
+} from "@/constants/inspections";
+import { cn } from "@/lib/utils";
+import { inspectionService } from "@/services/inspectionService";
+import { useAppDispatch, useAppSelector } from "@/store";
+import { deleteInspection } from "@/store/slices/inspectionsSlice";
+import type { Inspection } from "@qit/shared";
+import { format, parseISO } from "date-fns";
+import {
+  AlertTriangle,
+  CheckCircle,
+  ChevronLeft,
+  Clock,
+  Trash2,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 // ── Detail field ──────────────────────────────────────────────────────────────
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -74,23 +79,26 @@ function DetailSkeleton() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InspectionDetailPage() {
-  const { id }       = useParams<{ id: string }>();
-  const navigate     = useNavigate();
-  const dispatch     = useAppDispatch();
-  const { toast }    = useToast();
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const { toast } = useToast();
   const inspectionId = Number(id);
 
-  const currentUser   = useAppSelector((s) => s.auth.user);
-  const isSubmitting  = useAppSelector((s) => s.inspections.isSubmitting);
-  const reduxItem     = useAppSelector((s) =>
+  const currentUser = useAppSelector((s) => s.auth.user);
+  const isSubmitting = useAppSelector((s) => s.inspections.isSubmitting);
+  const reduxItem = useAppSelector((s) =>
     s.inspections.items.find((i) => i.id === inspectionId)
   );
 
-  const [inspection,   setInspection]   = useState<Inspection | null>(reduxItem ?? null);
-  const [loading,      setLoading]      = useState(!reduxItem);
-  const [fetchError,   setFetchError]   = useState<string | null>(null);
-  const [resolveOpen,  setResolveOpen]  = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [inspection, setInspection] = useState<Inspection | null>(
+    reduxItem ?? null
+  );
+  const [loading, setLoading] = useState(!reduxItem);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [remarksExpanded, setRemarksExpanded] = useState(false);
 
   // Fetch from API if not in Redux store
   useEffect(() => {
@@ -110,11 +118,11 @@ export default function InspectionDetailPage() {
 
   // ── RBAC ──────────────────────────────────────────────────────────────────
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === "admin";
 
   const canResolve =
     !!inspection &&
-    inspection.status === 'Open' &&
+    inspection.status === "Open" &&
     !!currentUser &&
     (isAdmin || inspection.createdBy === currentUser.id);
 
@@ -126,15 +134,19 @@ export default function InspectionDetailPage() {
     if (!inspection) return;
     const result = await dispatch(deleteInspection(inspection.id));
     if (deleteInspection.fulfilled.match(result)) {
-      toast({ title: 'Inspection deleted', description: `Inspection #${inspection.id} removed.` });
-      navigate('/inspections');
+      toast({
+        title: "Inspection deleted",
+        description: `Inspection #${inspection.id} removed.`,
+      });
+      navigate("/inspections");
     } else {
       toast({
-        variant: 'destructive',
-        title: 'Delete failed',
-        description: (result.payload as string) ?? 'Could not delete inspection.',
+        variant: "destructive",
+        title: "Delete failed",
+        description:
+          (result.payload as string) ?? "Could not delete inspection.",
       });
-      setConfirmDelete(false);
+      setDeleteConfirmOpen(false);
     }
   };
 
@@ -147,19 +159,26 @@ export default function InspectionDetailPage() {
       <div className="mx-auto max-w-2xl px-4 pt-16 text-center">
         <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-destructive/60" />
         <p className="font-medium text-destructive">
-          {fetchError ?? 'Inspection not found.'}
+          {fetchError ?? "Inspection not found."}
         </p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/inspections')}>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => navigate("/inspections")}
+        >
           Back to Inspections
         </Button>
       </div>
     );
   }
 
-  const dateLabel     = format(parseISO(inspection.date), 'd MMM yyyy');
-  const createdLabel  = format(parseISO(inspection.createdAt), 'd MMM yyyy, HH:mm');
+  const dateLabel = format(parseISO(inspection.date), "d MMM yyyy");
+  const createdLabel = format(
+    parseISO(inspection.createdAt),
+    "d MMM yyyy, HH:mm"
+  );
   const resolvedLabel = inspection.resolvedAt
-    ? format(parseISO(inspection.resolvedAt), 'd MMM yyyy, HH:mm')
+    ? format(parseISO(inspection.resolvedAt), "d MMM yyyy, HH:mm")
     : null;
 
   return (
@@ -170,13 +189,12 @@ export default function InspectionDetailPage() {
         onClick={() => navigate(-1)}
         className="mb-4 flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ChevronLeft className="h-4 w-4" />
         Back
       </button>
 
       <Card>
         <CardContent className="pt-6">
-
           {/* Machine ID + Severity badge */}
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -189,8 +207,8 @@ export default function InspectionDetailPage() {
             </div>
             <span
               className={cn(
-                'shrink-0 rounded-full px-3 py-1 text-sm font-semibold',
-                severityBadge[inspection.severity]
+                "shrink-0 rounded-full px-3 py-1 text-sm font-semibold",
+                SEVERITY_BADGE[inspection.severity]
               )}
             >
               {inspection.severity}
@@ -201,11 +219,11 @@ export default function InspectionDetailPage() {
           <div className="mt-3">
             <span
               className={cn(
-                'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold',
-                statusBadge[inspection.status]
+                "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold",
+                STATUS_BADGE[inspection.status]
               )}
             >
-              {inspection.status === 'Open' ? (
+              {inspection.status === "Open" ? (
                 <Clock className="h-3.5 w-3.5" />
               ) : (
                 <CheckCircle className="h-3.5 w-3.5" />
@@ -222,7 +240,8 @@ export default function InspectionDetailPage() {
             <Field label="Inspection Date">{dateLabel}</Field>
             <Field label="Logged At">{createdLabel}</Field>
             <Field label="Logged By">
-              {inspection.createdByUsername ?? (inspection.createdBy ? `User #${inspection.createdBy}` : '—')}
+              {inspection.createdByUsername ??
+                (inspection.createdBy ? `User #${inspection.createdBy}` : "—")}
               {inspection.createdBy === currentUser?.id && (
                 <span className="ml-1.5 inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                   you
@@ -231,13 +250,35 @@ export default function InspectionDetailPage() {
             </Field>
             {inspection.remarks && (
               <div className="col-span-2">
-                <Field label="Remarks">{inspection.remarks}</Field>
+                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Remarks
+                </dt>
+                <dd className="mt-0.5 text-sm text-foreground">
+                  {/* Desktop: always full text */}
+                  <span className="hidden sm:block">{inspection.remarks}</span>
+                  {/* Mobile: truncate with toggle */}
+                  <span className="sm:hidden">
+                    {remarksExpanded ||
+                    inspection.remarks.length <= REMARKS_LIMIT
+                      ? inspection.remarks
+                      : `${inspection.remarks.slice(0, REMARKS_LIMIT)}…`}
+                    {inspection.remarks.length > REMARKS_LIMIT && (
+                      <button
+                        type="button"
+                        onClick={() => setRemarksExpanded((v) => !v)}
+                        className="ml-1 text-xs font-medium text-primary hover:underline"
+                      >
+                        {remarksExpanded ? "Read less" : "Read more"}
+                      </button>
+                    )}
+                  </span>
+                </dd>
               </div>
             )}
           </dl>
 
           {/* Resolution box */}
-          {inspection.status === 'Resolved' && (
+          {inspection.status === "Resolved" && (
             <div className="mt-5 rounded-md border border-green-200 bg-green-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
                 Resolution Note
@@ -246,66 +287,36 @@ export default function InspectionDetailPage() {
                 {inspection.resolutionNote}
               </p>
               {resolvedLabel && (
-                <p className="mt-2 text-xs text-green-600">Resolved on {resolvedLabel}</p>
+                <p className="mt-2 text-xs text-green-600">
+                  Resolved on {resolvedLabel}
+                </p>
               )}
             </div>
           )}
 
           {/* Actions */}
-          <div className="mt-6 space-y-3">
-            {/* Resolve */}
+          <div className="mt-6 flex gap-3">
             {canResolve && (
-              <Button className="w-full" size="lg" onClick={() => setResolveOpen(true)}>
+              <Button
+                className="flex-1"
+                size="lg"
+                onClick={() => setResolveOpen(true)}
+              >
                 <CheckCircle className="mr-2 h-4 w-4" />
-                Mark as Resolved
+                Resolve
               </Button>
             )}
 
-            {/* Delete (admin only) */}
-            {canDelete && !confirmDelete && (
+            {canDelete && (
               <Button
                 variant="destructive"
-                className="w-full"
+                className="flex-1"
                 size="lg"
-                onClick={() => setConfirmDelete(true)}
+                onClick={() => setDeleteConfirmOpen(true)}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                Delete Inspection
+                Delete
               </Button>
-            )}
-
-            {/* Inline delete confirmation */}
-            {canDelete && confirmDelete && (
-              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4">
-                <p className="mb-3 text-sm font-medium text-destructive">
-                  Permanently delete this inspection? This cannot be undone.
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    disabled={isSubmitting}
-                    onClick={() => setConfirmDelete(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="flex-1"
-                    disabled={isSubmitting}
-                    onClick={handleDelete}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deleting…
-                      </>
-                    ) : (
-                      'Confirm Delete'
-                    )}
-                  </Button>
-                </div>
-              </div>
             )}
           </div>
         </CardContent>
@@ -315,6 +326,16 @@ export default function InspectionDetailPage() {
         open={resolveOpen}
         onOpenChange={setResolveOpen}
         inspectionId={inspection.id}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Delete inspection?"
+        description={`Inspection #${inspection.id} will be permanently removed. This cannot be undone.`}
+        confirmLabel="Delete"
+        isLoading={isSubmitting}
+        onConfirm={handleDelete}
       />
     </div>
   );

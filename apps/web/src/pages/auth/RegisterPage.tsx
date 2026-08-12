@@ -1,49 +1,58 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Scissors, Loader2 } from 'lucide-react';
-import { Button }  from '@/components/ui/button';
-import { Input }   from '@/components/ui/input';
-import { Label }   from '@/components/ui/label';
+import { Button } from "@/components/ui/button";
 import {
-  Card, CardContent, CardDescription,
-  CardFooter, CardHeader, CardTitle,
-} from '@/components/ui/card';
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import { useAppDispatch, useAppSelector } from '@/store';
-import { registerThunk }                  from '@/store/slices/authSlice';
-import { toast }                          from '@/components/ui/use-toast';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "@/components/ui/use-toast";
+import { useAppDispatch, useAppSelector } from "@/store";
+import { registerThunk } from "@/store/slices/authSlice";
+import { Loader2, Scissors } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function RegisterPage() {
-  const dispatch      = useAppDispatch();
-  const navigate      = useNavigate();
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { isLoading } = useAppSelector((s) => s.auth);
 
-  const [username,        setUsername]        = useState('');
-  const [password,        setPassword]        = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [role,            setRole]            = useState('supervisor');
-  const [confirmError,    setConfirmError]    = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState("supervisor");
+  const [confirmError, setConfirmError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (password !== confirmPassword) {
-      setConfirmError('Passwords do not match');
+      setConfirmError("Passwords do not match");
       return;
     }
-    setConfirmError('');
+    setConfirmError("");
 
     const result = await dispatch(registerThunk({ username, password, role }));
     if (registerThunk.fulfilled.match(result)) {
-      navigate('/dashboard');
+      navigate("/dashboard");
     } else {
       toast({
-        variant:     'destructive',
-        title:       'Registration failed',
-        description: (result.payload as string) ?? 'Could not create account. Try a different username.',
+        variant: "destructive",
+        title: "Registration failed",
+        description:
+          (result.payload as string) ??
+          "Could not create account. Try a different username.",
       });
     }
   };
@@ -57,8 +66,12 @@ export default function RegisterPage() {
             <Scissors className="h-7 w-7" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold tracking-tight">Create Account</CardTitle>
-            <CardDescription className="mt-0.5">Quality Inspection Tracker</CardDescription>
+            <CardTitle className="text-2xl font-bold tracking-tight">
+              Create Account
+            </CardTitle>
+            <CardDescription className="mt-0.5">
+              Track defects. Drive quality.
+            </CardDescription>
           </div>
         </CardHeader>
 
@@ -102,7 +115,7 @@ export default function RegisterPage() {
                 value={confirmPassword}
                 onChange={(e) => {
                   setConfirmPassword(e.target.value);
-                  if (confirmError) setConfirmError('');
+                  if (confirmError) setConfirmError("");
                 }}
                 autoComplete="new-password"
                 required
@@ -130,13 +143,20 @@ export default function RegisterPage() {
 
           <CardFooter className="flex-col gap-3 pt-2">
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Creating account…</>
-                : 'Register'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Creating account…
+                </>
+              ) : (
+                "Register"
+              )}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{' '}
-              <Link to="/login" className="font-medium text-primary hover:underline">
+              Already have an account?{" "}
+              <Link
+                to="/login"
+                className="font-medium text-primary hover:underline"
+              >
                 Sign in
               </Link>
             </p>

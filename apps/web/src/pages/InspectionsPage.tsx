@@ -1,60 +1,138 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Filter, X, ChevronDown, ChevronUp, ClipboardList } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
-import type { Inspection, InspectionFilters, Severity, Status, User } from '@qit/shared';
-import { useAppDispatch, useAppSelector } from '@/store';
-import { fetchInspections, setFilters } from '@/store/slices/inspectionsSlice';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+  DATE_PRESETS,
+  type DatePreset,
+  SEV_DOT,
+  SEVERITY_BADGE,
+  SORT_OPTIONS,
+  type SortValue,
+  STATUS_BADGE,
+  STATUS_DOT,
+} from "@/constants/inspections";
+import { useOpenLogDialog } from "@/lib/LogDialogContext";
+import { cn } from "@/lib/utils";
+import { useAppDispatch, useAppSelector } from "@/store";
+import { fetchInspections, setFilters } from "@/store/slices/inspectionsSlice";
+import type {
+  Inspection,
+  InspectionFilters,
+  Severity,
+  Status,
+  User,
+} from "@qit/shared";
+import { format, parseISO, subDays } from "date-fns";
+import {
+  ArrowUpDown,
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Plus,
+  PlusCircle,
+  Search,
+  X,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-// ── Style helpers ─────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const severityPill: Record<Severity | 'All', { selected: string; idle: string }> = {
-  All:      { selected: 'bg-foreground text-background',      idle: 'bg-muted text-foreground hover:bg-muted/80' },
-  Critical: { selected: 'bg-red-500 text-white',              idle: 'bg-red-100 text-red-700 hover:bg-red-200' },
-  Major:    { selected: 'bg-amber-500 text-white',            idle: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
-  Minor:    { selected: 'bg-green-500 text-white',            idle: 'bg-green-100 text-green-700 hover:bg-green-200' },
-};
+// ── Filter pill component ─────────────────────────────────────────────────────
 
-const statusPill: Record<Status | 'All', { selected: string; idle: string }> = {
-  All:      { selected: 'bg-foreground text-background',      idle: 'bg-muted text-foreground hover:bg-muted/80' },
-  Open:     { selected: 'bg-blue-500 text-white',             idle: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
-  Resolved: { selected: 'bg-green-500 text-white',            idle: 'bg-green-100 text-green-700 hover:bg-green-200' },
-};
+function FilterPill({
+  label,
+  icon: Icon,
+  isOpen,
+  hasValue,
+  onClick,
+  onClear,
+  children,
+  align = "left",
+}: {
+  label: string;
+  icon?: React.ElementType;
+  isOpen: boolean;
+  hasValue: boolean;
+  onClick: () => void;
+  onClear?: () => void;
+  children: React.ReactNode;
+  align?: "left" | "right";
+}) {
+  return (
+    <div className="relative shrink-0 flex items-center">
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "flex items-center gap-1.5 h-9 px-3 border bg-background text-sm font-medium",
+          "transition-colors whitespace-nowrap",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+          hasValue && onClear
+            ? "rounded-l-lg rounded-r-none border-r-0"
+            : "rounded-lg",
+          hasValue || isOpen
+            ? "border-primary text-primary bg-primary/5"
+            : "border-border text-foreground hover:bg-accent"
+        )}
+      >
+        {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
+        {label}
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 transition-transform duration-150",
+            isOpen && "rotate-180"
+          )}
+        />
+      </button>
 
-const severityBadge: Record<Severity, string> = {
-  Critical: 'bg-red-100 text-red-700 border border-red-200',
-  Major:    'bg-amber-100 text-amber-700 border border-amber-200',
-  Minor:    'bg-green-100 text-green-700 border border-green-200',
-};
+      {hasValue && onClear && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClear();
+          }}
+          className={cn(
+            "flex items-center justify-center h-9 w-7 rounded-r-lg border border-l-0",
+            "transition-colors border-primary bg-primary/5 text-primary hover:bg-primary/15",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          )}
+          aria-label="Clear filter"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
 
-const statusBadge: Record<Status, string> = {
-  Open:     'border border-blue-400 text-blue-600',
-  Resolved: 'bg-green-500 text-white',
-};
+      {isOpen && (
+        <div
+          className={cn(
+            "absolute top-full z-30 mt-1 rounded-lg border bg-background shadow-lg",
+            align === "right" ? "right-0" : "left-0"
+          )}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
-// ── Pill button ───────────────────────────────────────────────────────────────
+// ── Dropdown option row ───────────────────────────────────────────────────────
 
-function Pill({
+function DropdownOption({
   label,
   selected,
-  styles,
+  dot,
   onClick,
 }: {
   label: string;
   selected: boolean;
-  styles: { selected: string; idle: string };
+  dot?: string;
   onClick: () => void;
 }) {
   return (
@@ -62,11 +140,29 @@ function Pill({
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
-        selected ? styles.selected : styles.idle
+        "flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-accent",
+        selected && "bg-primary/10"
       )}
     >
-      {label}
+      {dot !== undefined ? (
+        <span
+          className={cn(
+            "h-2 w-2 shrink-0 rounded-full",
+            dot || "bg-muted-foreground"
+          )}
+        />
+      ) : (
+        <span className="h-2 w-2 shrink-0" />
+      )}
+      <span
+        className={cn(
+          "flex-1 text-left",
+          selected && "font-semibold text-primary"
+        )}
+      >
+        {label}
+      </span>
+      {selected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
     </button>
   );
 }
@@ -105,8 +201,8 @@ function InspectionCard({
   currentUser: User | null;
   onClick: () => void;
 }) {
-  const dateLabel = format(parseISO(inspection.date), 'd MMM yyyy');
-  const isOwner   = !!currentUser && inspection.createdBy === currentUser.id;
+  const dateLabel = format(parseISO(inspection.date), "d MMM yyyy");
+  const isOwner = !!currentUser && inspection.createdBy === currentUser.id;
 
   return (
     <Card
@@ -114,7 +210,6 @@ function InspectionCard({
       onClick={onClick}
     >
       <CardContent className="pt-4">
-        {/* Row 1: Machine ID + Severity */}
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 truncate font-semibold text-foreground">
             {inspection.machineLineId}
@@ -126,32 +221,32 @@ function InspectionCard({
           </span>
           <span
             className={cn(
-              'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold',
-              severityBadge[inspection.severity]
+              "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+              SEVERITY_BADGE[inspection.severity]
             )}
           >
             {inspection.severity}
           </span>
         </div>
 
-        {/* Row 2: Defect type + Date */}
         <div className="mt-1.5 flex items-center gap-2 text-sm text-muted-foreground">
           <span className="truncate">{inspection.defectType}</span>
           <span className="shrink-0">·</span>
           <span className="shrink-0">{dateLabel}</span>
         </div>
 
-        {/* Row 3: Status + hint */}
         <div className="mt-2 flex items-center justify-between">
           <span
             className={cn(
-              'rounded-full px-2.5 py-0.5 text-xs font-semibold',
-              statusBadge[inspection.status]
+              "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+              STATUS_BADGE[inspection.status]
             )}
           >
             {inspection.status}
           </span>
-          <span className="text-xs text-muted-foreground">Tap to view →</span>
+          <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+            Tap to view <ChevronRight className="h-3.5 w-3.5" />
+          </span>
         </div>
       </CardContent>
     </Card>
@@ -160,34 +255,43 @@ function InspectionCard({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const SORT_OPTIONS = [
-  { label: 'Date ↓',   value: 'date-desc' },
-  { label: 'Date ↑',   value: 'date-asc' },
-  { label: 'Severity', value: 'severity-desc' },
-  { label: 'Created',  value: 'createdAt-desc' },
-] as const;
+type ActiveFilter = "severity" | "status" | "dateRange" | "sort" | null;
 
 export default function InspectionsPage() {
-  const dispatch   = useAppDispatch();
-  const navigate   = useNavigate();
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const openLogDialog = useOpenLogDialog();
 
   const currentUser = useAppSelector((s) => s.auth.user);
-  const filters     = useAppSelector((s) => s.inspections.filters);
-  const items       = useAppSelector((s) => s.inspections.items);
-  const total       = useAppSelector((s) => s.inspections.total);
-  const isLoading   = useAppSelector((s) => s.inspections.isLoading);
+  const filters = useAppSelector((s) => s.inspections.filters);
+  const items = useAppSelector((s) => s.inspections.items);
+  const total = useAppSelector((s) => s.inspections.total);
+  const isLoading = useAppSelector((s) => s.inspections.isLoading);
 
-  const [filterOpen, setFilterOpen]     = useState(false);
   const [displayItems, setDisplayItems] = useState<Inspection[]>([]);
-  const [localPage, setLocalPage]       = useState(1);
-  const isLoadMoreRef                   = useRef(false);
+  const [localPage, setLocalPage] = useState(1);
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>(null);
+  const [searchInput, setSearchInput] = useState(filters.search ?? "");
+  const [draftFrom, setDraftFrom] = useState(filters.dateFrom ?? "");
+  const [draftTo, setDraftTo] = useState(filters.dateTo ?? "");
+  const [dateError, setDateError] = useState("");
+  const [datePreset, setDatePreset] = useState<DatePreset>("");
+
+  const isLoadMoreRef = useRef(false);
+  const filterBarRef = useRef<HTMLDivElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fromDateRef = useRef<HTMLInputElement>(null);
+  const toDateRef = useRef<HTMLInputElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const hasMore = displayItems.length < total;
 
   // Initial fetch
   useEffect(() => {
     dispatch(fetchInspections(filters));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync displayItems when Redux items change
+  // Sync display items on Redux change
   useEffect(() => {
     if (isLoadMoreRef.current) {
       setDisplayItems((prev) => [...prev, ...items]);
@@ -196,6 +300,52 @@ export default function InspectionsPage() {
       setDisplayItems(items);
     }
   }, [items]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        filterBarRef.current &&
+        !filterBarRef.current.contains(e.target as Node)
+      ) {
+        setActiveFilter(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Debounced search
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      const term = searchInput.trim() || undefined;
+      if (term !== filters.search) {
+        applyFilter({ search: term });
+      }
+    }, 400);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchInput]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Infinite scroll sentinel
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore || isLoading) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isLoadMoreRef.current) {
+          handleLoadMore();
+        }
+      },
+      { rootMargin: "0px 0px 300px 0px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -215,172 +365,408 @@ export default function InspectionsPage() {
   };
 
   const clearFilters = () => {
-    const cleared: InspectionFilters = { page: 1 };
+    setSearchInput("");
+    setDraftFrom("");
+    setDraftTo("");
+    setDateError("");
+    setDatePreset("");
     setLocalPage(1);
     isLoadMoreRef.current = false;
-    dispatch(setFilters({ severity: undefined, status: undefined, dateFrom: undefined, dateTo: undefined, sortBy: undefined, sortOrder: undefined }));
-    dispatch(fetchInspections(cleared));
+    dispatch(
+      setFilters({
+        search: undefined,
+        severity: undefined,
+        status: undefined,
+        dateFrom: undefined,
+        dateTo: undefined,
+        sortBy: undefined,
+        sortOrder: undefined,
+      })
+    );
+    dispatch(fetchInspections({ page: 1 }));
+  };
+
+  const toggle = (f: ActiveFilter) => {
+    setActiveFilter((prev) => {
+      if (prev !== f && f === "dateRange") {
+        if (datePreset === "custom") {
+          setDraftFrom(filters.dateFrom ?? "");
+          setDraftTo(filters.dateTo ?? "");
+        }
+        setDateError("");
+      }
+      return prev === f ? null : f;
+    });
+  };
+
+  const applyPreset = (preset: { value: DatePreset; days?: number }) => {
+    if (preset.value === "custom") {
+      setDatePreset("custom");
+      setDraftFrom(filters.dateFrom ?? "");
+      setDraftTo(filters.dateTo ?? "");
+      setDateError("");
+      return;
+    }
+    const today = new Date();
+    const from = format(subDays(today, preset.days! - 1), "yyyy-MM-dd");
+    const to = format(today, "yyyy-MM-dd");
+    setDatePreset(preset.value);
+    setDraftFrom("");
+    setDraftTo("");
+    applyFilter({ dateFrom: from, dateTo: to });
+    setActiveFilter(null);
+  };
+
+  const applyDateRange = () => {
+    if (!draftFrom || !draftTo) {
+      setDateError("Both From and To dates are required.");
+      return;
+    }
+    if (draftTo < draftFrom) {
+      setDateError("To date must be after From date.");
+      return;
+    }
+    setDateError("");
+    setDatePreset("custom");
+    applyFilter({ dateFrom: draftFrom, dateTo: draftTo });
+    setActiveFilter(null);
+  };
+
+  const clearDateRange = () => {
+    setDraftFrom("");
+    setDraftTo("");
+    setDateError("");
+    setDatePreset("");
+    applyFilter({ dateFrom: undefined, dateTo: undefined });
+    setActiveFilter(null);
   };
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
-  const hasActiveFilters = !!(
-    filters.severity || filters.status || filters.dateFrom || filters.dateTo ||
-    (filters.sortBy && !(filters.sortBy === 'date' && filters.sortOrder === 'desc'))
-  );
+  // search has its own inline X — only count pill filters toward the threshold
+  const activeFilterCount = [
+    !!filters.severity,
+    !!filters.status,
+    !!(filters.dateFrom || filters.dateTo),
+    !!filters.sortBy,
+  ].filter(Boolean).length;
 
-  const sortValue = filters.sortBy
-    ? `${filters.sortBy}-${filters.sortOrder ?? 'desc'}`
-    : 'date-desc';
+  const hasActiveFilters = activeFilterCount > 0 || !!filters.search;
 
-  const hasMore = displayItems.length < total;
+  // true during initial load AND filter changes (not during infinite scroll load-more)
+  const isFilterLoading = isLoading && !isLoadMoreRef.current;
+
+  const currentSort: SortValue = filters.sortBy
+    ? (`${filters.sortBy}-${filters.sortOrder ?? "desc"}` as SortValue)
+    : "createdAt-desc";
+
+  const sortLabel =
+    SORT_OPTIONS.find((o) => o.value === currentSort)?.label ?? "Sort";
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="mx-auto max-w-2xl px-4 pb-8 pt-4">
-      {/* Page header */}
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <button
+        type="button"
+        onClick={() => navigate("/dashboard")}
+        className="mb-2 flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        Back
+      </button>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">Inspections</h1>
-        <button
-          type="button"
-          onClick={() => setFilterOpen((o) => !o)}
-          className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-        >
-          <Filter className="h-4 w-4" />
-          Filters
-          {filterOpen ? (
-            <ChevronUp className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronDown className="h-3.5 w-3.5" />
-          )}
-          {hasActiveFilters && (
-            <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
-              !
-            </span>
-          )}
-        </button>
+        <Button size="sm" className="hidden sm:flex" onClick={openLogDialog}>
+          <PlusCircle className="mr-1.5 h-4 w-4" />
+          Log Inspection
+        </Button>
       </div>
 
-      {/* Filter bar */}
-      {filterOpen && (
-        <div className="mb-4 space-y-4 rounded-lg border bg-card p-4 shadow-sm">
-
-          {/* Severity pills */}
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Severity
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {(['All', 'Critical', 'Major', 'Minor'] as const).map((s) => (
-                <Pill
-                  key={s}
-                  label={s}
-                  selected={s === 'All' ? !filters.severity : filters.severity === s}
-                  styles={severityPill[s]}
-                  onClick={() => applyFilter({ severity: s === 'All' ? undefined : s })}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Status pills */}
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Status
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {(['All', 'Open', 'Resolved'] as const).map((s) => (
-                <Pill
-                  key={s}
-                  label={s}
-                  selected={s === 'All' ? !filters.status : filters.status === s}
-                  styles={statusPill[s]}
-                  onClick={() => applyFilter({ status: s === 'All' ? undefined : s })}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Date range */}
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Date Range
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="mb-1 block text-xs text-muted-foreground">From</label>
-                <Input
-                  type="date"
-                  value={filters.dateFrom ?? ''}
-                  onChange={(e) => applyFilter({ dateFrom: e.target.value || undefined })}
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-muted-foreground">To</label>
-                <Input
-                  type="date"
-                  value={filters.dateTo ?? ''}
-                  onChange={(e) => applyFilter({ dateTo: e.target.value || undefined })}
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Sort by */}
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Sort By
-            </p>
-            <Select
-              value={sortValue}
-              onValueChange={(v) => {
-                const [by, order] = v.split('-') as [
-                  InspectionFilters['sortBy'],
-                  InspectionFilters['sortOrder']
-                ];
-                applyFilter({ sortBy: by, sortOrder: order });
-              }}
+      {/* ── Filter bar ──────────────────────────────────────────────────── */}
+      <div ref={filterBarRef} className="mb-4 space-y-2">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search by machine, defect type, remarks…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="h-9 pl-9 pr-9"
+          />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={() => setSearchInput("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SORT_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Clear filters */}
-          {hasActiveFilters && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex w-full items-center gap-1.5"
-              onClick={clearFilters}
-            >
-              <X className="h-3.5 w-3.5" />
-              Clear Filters
-            </Button>
+              <X className="h-4 w-4" />
+            </button>
           )}
         </div>
-      )}
+
+        {/* Filter pills row */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Severity */}
+          <FilterPill
+            label={filters.severity ?? "Severity"}
+            isOpen={activeFilter === "severity"}
+            hasValue={!!filters.severity}
+            onClick={() => toggle("severity")}
+            onClear={() => {
+              applyFilter({ severity: undefined });
+              setActiveFilter(null);
+            }}
+          >
+            <div className="min-w-[140px] py-1">
+              <DropdownOption
+                label="All"
+                selected={!filters.severity}
+                onClick={() => {
+                  applyFilter({ severity: undefined });
+                  setActiveFilter(null);
+                }}
+              />
+              {(["Critical", "Major", "Minor"] as Severity[]).map((sev) => (
+                <DropdownOption
+                  key={sev}
+                  label={sev}
+                  selected={filters.severity === sev}
+                  dot={SEV_DOT[sev]}
+                  onClick={() => {
+                    applyFilter({ severity: sev });
+                    setActiveFilter(null);
+                  }}
+                />
+              ))}
+            </div>
+          </FilterPill>
+
+          {/* Status */}
+          <FilterPill
+            label={filters.status ?? "Status"}
+            isOpen={activeFilter === "status"}
+            hasValue={!!filters.status}
+            onClick={() => toggle("status")}
+            onClear={() => {
+              applyFilter({ status: undefined });
+              setActiveFilter(null);
+            }}
+          >
+            <div className="min-w-[140px] py-1">
+              <DropdownOption
+                label="All"
+                selected={!filters.status}
+                onClick={() => {
+                  applyFilter({ status: undefined });
+                  setActiveFilter(null);
+                }}
+              />
+              {(["Open", "Resolved"] as Status[]).map((st) => (
+                <DropdownOption
+                  key={st}
+                  label={st}
+                  selected={filters.status === st}
+                  dot={STATUS_DOT[st]}
+                  onClick={() => {
+                    applyFilter({ status: st });
+                    setActiveFilter(null);
+                  }}
+                />
+              ))}
+            </div>
+          </FilterPill>
+
+          {/* Date Range */}
+          <FilterPill
+            label="Date Range"
+            icon={Calendar}
+            isOpen={activeFilter === "dateRange"}
+            hasValue={!!(filters.dateFrom || filters.dateTo)}
+            onClick={() => toggle("dateRange")}
+            onClear={clearDateRange}
+            align="right"
+          >
+            <div className="w-52 py-1">
+              {DATE_PRESETS.map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => applyPreset(p)}
+                  className={cn(
+                    "flex w-full items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-accent",
+                    datePreset === p.value && "bg-primary/10 text-primary"
+                  )}
+                >
+                  {p.label}
+                  {datePreset === p.value && (
+                    <Check className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                </button>
+              ))}
+
+              {datePreset === "custom" && (
+                <>
+                  <div className="mx-3 my-1 border-t" />
+                  <div className="px-3 pb-3 pt-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <label className="w-8 shrink-0 text-xs font-medium text-muted-foreground">
+                        From
+                      </label>
+                      <div className="relative flex-1 min-w-0">
+                        <Input
+                          ref={fromDateRef}
+                          type="date"
+                          value={draftFrom}
+                          onChange={(e) => {
+                            setDraftFrom(e.target.value);
+                            setDateError("");
+                          }}
+                          className="h-8 w-full pr-8 text-sm [&::-webkit-calendar-picker-indicator]:hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            try {
+                              fromDateRef.current?.showPicker();
+                            } catch {
+                              fromDateRef.current?.click();
+                            }
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <Calendar className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="w-8 shrink-0 text-xs font-medium text-muted-foreground">
+                        To
+                      </label>
+                      <div className="relative flex-1 min-w-0">
+                        <Input
+                          ref={toDateRef}
+                          type="date"
+                          value={draftTo}
+                          min={draftFrom || undefined}
+                          onChange={(e) => {
+                            setDraftTo(e.target.value);
+                            setDateError("");
+                          }}
+                          className="h-8 w-full pr-8 text-sm [&::-webkit-calendar-picker-indicator]:hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            try {
+                              toDateRef.current?.showPicker();
+                            } catch {
+                              toDateRef.current?.click();
+                            }
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <Calendar className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    {dateError && (
+                      <p className="text-xs text-destructive">{dateError}</p>
+                    )}
+                    <div className="flex items-center justify-end gap-2 pt-0.5">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={clearDateRange}
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-7 px-3 text-xs"
+                        onClick={applyDateRange}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {datePreset !== "" && datePreset !== "custom" && (
+                <>
+                  <div className="mx-3 my-1 border-t" />
+                  <div className="px-3 py-1.5">
+                    <button
+                      type="button"
+                      onClick={clearDateRange}
+                      className="w-full py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-destructive"
+                    >
+                      Clear date filter
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </FilterPill>
+
+          {/* Sort */}
+          <FilterPill
+            label={filters.sortBy ? sortLabel : "Sort"}
+            icon={ArrowUpDown}
+            isOpen={activeFilter === "sort"}
+            hasValue={!!filters.sortBy}
+            onClick={() => toggle("sort")}
+            onClear={() => {
+              applyFilter({ sortBy: undefined, sortOrder: undefined });
+              setActiveFilter(null);
+            }}
+          >
+            <div className="min-w-[160px] py-1">
+              {SORT_OPTIONS.map((opt) => (
+                <DropdownOption
+                  key={opt.value}
+                  label={opt.label}
+                  selected={currentSort === opt.value && !!filters.sortBy}
+                  onClick={() => {
+                    const [by, order] = opt.value.split("-") as [
+                      InspectionFilters["sortBy"],
+                      InspectionFilters["sortOrder"],
+                    ];
+                    applyFilter({ sortBy: by, sortOrder: order });
+                    setActiveFilter(null);
+                  }}
+                />
+              ))}
+            </div>
+          </FilterPill>
+
+          {/* Clear all */}
+          {activeFilterCount > 1 && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Count */}
-      {!isLoading && displayItems.length > 0 && (
+      {!isFilterLoading && displayItems.length > 0 && (
         <p className="mb-3 text-sm text-muted-foreground">
-          Showing {displayItems.length} of {total} inspection{total !== 1 ? 's' : ''}
+          Showing {displayItems.length} of {total} inspection
+          {total !== 1 ? "s" : ""}
         </p>
       )}
 
-      {/* Loading state */}
-      {isLoading && displayItems.length === 0 && (
+      {/* Skeleton — initial load + filter changes */}
+      {isFilterLoading && (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonCard key={i} />
@@ -389,17 +775,19 @@ export default function InspectionsPage() {
       )}
 
       {/* Empty state */}
-      {!isLoading && displayItems.length === 0 && (
+      {!isFilterLoading && displayItems.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <ClipboardList className="mb-4 h-12 w-12 text-muted-foreground/40" />
-          <h2 className="text-base font-semibold text-foreground">No inspections found</h2>
+          <h2 className="text-base font-semibold text-foreground">
+            No inspections found
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {hasActiveFilters
-              ? 'Try adjusting your filters.'
-              : 'Start tracking quality defects by logging your first inspection.'}
+              ? "Try adjusting your filters."
+              : "Start tracking quality defects by logging your first inspection."}
           </p>
           {!hasActiveFilters && (
-            <Button className="mt-4" onClick={() => navigate('/log')}>
+            <Button className="mt-4" onClick={openLogDialog}>
               Log your first inspection
             </Button>
           )}
@@ -412,7 +800,7 @@ export default function InspectionsPage() {
       )}
 
       {/* Inspection list */}
-      {displayItems.length > 0 && (
+      {!isFilterLoading && displayItems.length > 0 && (
         <div className="space-y-3">
           {displayItems.map((inspection) => (
             <InspectionCard
@@ -425,24 +813,26 @@ export default function InspectionsPage() {
         </div>
       )}
 
-      {/* Load more */}
-      {hasMore && !isLoading && displayItems.length > 0 && (
-        <Button
-          variant="outline"
-          className="mt-4 w-full"
-          onClick={handleLoadMore}
-        >
-          Load more
-        </Button>
-      )}
+      {/* Infinite scroll sentinel */}
+      <div ref={sentinelRef} className="h-1" />
 
-      {/* Loading more indicator */}
-      {isLoading && displayItems.length > 0 && (
+      {/* Load-more skeletons (infinite scroll) */}
+      {isLoading && isLoadMoreRef.current && (
         <div className="mt-4 space-y-3">
           <SkeletonCard />
           <SkeletonCard />
         </div>
       )}
+
+      {/* ── Mobile FAB ──────────────────────────────────────────────────── */}
+      <button
+        type="button"
+        onClick={openLogDialog}
+        aria-label="Log new inspection"
+        className="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 sm:hidden"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
     </div>
   );
 }

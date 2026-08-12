@@ -5,7 +5,13 @@
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\hites\\\\OneDrive\\\\Documents\\\\Demo Apps\\\\quality-inspection-tracker\" -Recurse -File | Where-Object { $_.FullName -notmatch '\\(node_modules|dist|\\\\.git\\)' } | ForEach-Object { $_.FullName } | Sort-Object)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\hites\\\\OneDrive\\\\Documents\\\\Demo Apps\\\\quality-inspection-tracker\" -Recurse -Depth 2)",
       "Bash(Select-Object FullName, PSIsContainer)",
-      "Bash(Format-Table -AutoSize)"
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\hites\\\\OneDrive\\\\Documents\\\\Demo Apps\\\\quality-inspection-tracker\" | Where-Object { $_.Name -ne 'node_modules' })",
+      "PowerShell(New-Item *)",
+      "PowerShell(Get-ChildItem -Path \".\" -Exclude \"node_modules\" | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem -Path \"apps\" | ForEach-Object { $_.Name }; Get-ChildItem -Path \"packages\" | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:3001/health\" -ErrorAction SilentlyContinue | ConvertTo-Json)"
     ]
   }
 }

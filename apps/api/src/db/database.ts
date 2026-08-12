@@ -5,15 +5,15 @@
  * project installs on any machine without C++ build tools.
  *
  * The client is created once and reused across the entire application.
- * DB file path is configured via DB_PATH in .env (default: ./data/qit.db).
+ * DB file path is configured via DB_PATH in .env (default: ./data/qualytrack.db).
  */
 
-import { createClient } from '@libsql/client';
-import fs from 'fs';
-import path from 'path';
+import { createClient } from "@libsql/client";
+import fs from "fs";
+import path from "path";
 
-const dbPath = process.env.DB_PATH || './data/qit.db';
-const dbDir  = path.dirname(path.resolve(dbPath));
+const dbPath = process.env.DB_PATH || "./data/qualytrack.db";
+const dbDir = path.dirname(path.resolve(dbPath));
 
 // Create the data directory if it does not exist so the DB file can be written
 if (!fs.existsSync(dbDir)) {

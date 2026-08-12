@@ -26,6 +26,14 @@ declare global {
   }
 }
 
+export function adminOnly(req: Request, res: Response, next: NextFunction): void {
+  if (req.user?.role !== 'admin') {
+    res.status(403).json({ success: false, error: 'Admin access required' });
+    return;
+  }
+  next();
+}
+
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
   const bearerHeader = req.headers.authorization;
 

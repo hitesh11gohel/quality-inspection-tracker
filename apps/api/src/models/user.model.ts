@@ -21,6 +21,8 @@ export interface DbUser {
   createdAt: string;
 }
 
+export type PublicUser = Omit<DbUser, 'passwordHash'>;
+
 export const UserModel = {
   /** Fetch a single user by username, or null if not found */
   async findByUsername(username: string): Promise<DbUser | null> {
@@ -29,6 +31,23 @@ export const UserModel = {
       args: [username],
     });
     return result.rows.length > 0 ? (result.rows[0] as unknown as DbUser) : null;
+  },
+
+  /** Fetch a single user by id, or null if not found */
+  async findById(id: number): Promise<DbUser | null> {
+    const result = await db.execute({
+      sql:  'SELECT * FROM users WHERE id = ?',
+      args: [id],
+    });
+    return result.rows.length > 0 ? (result.rows[0] as unknown as DbUser) : null;
+  },
+
+  /** Return all users (without password hashes), ordered by id */
+  async findAll(): Promise<PublicUser[]> {
+    const result = await db.execute(
+      'SELECT id, username, role, createdAt FROM users ORDER BY id ASC'
+    );
+    return result.rows as unknown as PublicUser[];
   },
 
   /** Returns true if a user with the given username already exists */
@@ -51,5 +70,21 @@ export const UserModel = {
       args: [username, passwordHash, role],
     });
     return Number(result.lastInsertRowid);
+  },
+
+  /** Update a user's username */
+  async updateUsername(id: number, username: string): Promise<void> {
+    await db.execute({
+      sql:  'UPDATE users SET username = ? WHERE id = ?',
+      args: [username, id],
+    });
+  },
+
+  /** Update a user's role */
+  async updateRole(id: number, role: string): Promise<void> {
+    await db.execute({
+      sql:  'UPDATE users SET role = ? WHERE id = ?',
+      args: [role, id],
+    });
   },
 };

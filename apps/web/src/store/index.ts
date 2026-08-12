@@ -6,24 +6,24 @@
  * type inference without manual type annotations on every call-site.
  */
 
-import { configureStore } from '@reduxjs/toolkit';
-import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
+import { configureStore } from "@reduxjs/toolkit";
+import { TypedUseSelectorHook, useDispatch, useSelector } from "react-redux";
 
-import authReducer        from '@/store/slices/authSlice';
-import inspectionsReducer from '@/store/slices/inspectionsSlice';
-import summaryReducer     from '@/store/slices/summarySlice';
+import authReducer from "@/store/slices/authSlice";
+import inspectionsReducer from "@/store/slices/inspectionsSlice";
+import summaryReducer from "@/store/slices/summarySlice";
 
 export const store = configureStore({
   reducer: {
-    auth:        authReducer,
+    auth: authReducer,
     inspections: inspectionsReducer,
-    summary:     summaryReducer,
+    summary: summaryReducer,
   },
 });
 
 // ── Typed helpers ─────────────────────────────────────────────────────────────
 
-export type RootState   = ReturnType<typeof store.getState>;
+export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
 /** Use instead of plain useDispatch — gives AppDispatch type for thunks */

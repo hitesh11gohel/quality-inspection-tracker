@@ -9,13 +9,14 @@
  * the hood) so callers always receive a token on successful registration.
  */
 
-import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { User } from '@qit/shared';
-import { authService } from '@/services/authService';
+import { authService } from "@/services/authService";
+import { userService } from "@/services/userService";
+import type { User } from "@qit/shared";
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const TOKEN_KEY = 'qit_token';
-const USER_KEY  = 'qit_user';
+const TOKEN_KEY = "qualytrack_token";
+const USER_KEY = "qualytrack_user";
 
 // ── State ─────────────────────────────────────────────────────────────────────
 interface AuthState {
@@ -27,22 +28,39 @@ interface AuthState {
 
 // Rehydrate from localStorage so refresh doesn't clear the session
 const storedToken = localStorage.getItem(TOKEN_KEY);
-const storedUser  = localStorage.getItem(USER_KEY);
+const storedUser = localStorage.getItem(USER_KEY);
 
 const initialState: AuthState = {
-  user:      storedUser  ? (JSON.parse(storedUser) as User) : null,
-  token:     storedToken ?? null,
+  user: storedUser ? (JSON.parse(storedUser) as User) : null,
+  token: storedToken ?? null,
   isLoading: false,
-  error:     null,
+  error: null,
 };
 
 // ── Async thunks ──────────────────────────────────────────────────────────────
 
 export const loginThunk = createAsyncThunk(
-  'auth/login',
-  async (credentials: { username: string; password: string }, { rejectWithValue }) => {
+  "auth/login",
+  async (
+    credentials: { username: string; password: string },
+    { rejectWithValue }
+  ) => {
     try {
-      return await authService.login(credentials.username, credentials.password);
+      return await authService.login(
+        credentials.username,
+        credentials.password
+      );
+    } catch (err) {
+      return rejectWithValue((err as Error).message);
+    }
+  }
+);
+
+export const updateUsernameThunk = createAsyncThunk(
+  "auth/updateUsername",
+  async (username: string, { rejectWithValue }) => {
+    try {
+      return await userService.updateUsername(username);
     } catch (err) {
       return rejectWithValue((err as Error).message);
     }
@@ -50,7 +68,7 @@ export const loginThunk = createAsyncThunk(
 );
 
 export const registerThunk = createAsyncThunk(
-  'auth/register',
+  "auth/register",
   async (
     credentials: { username: string; password: string; role?: string },
     { rejectWithValue }
@@ -63,7 +81,10 @@ export const registerThunk = createAsyncThunk(
         credentials.password,
         credentials.role
       );
-      return await authService.login(credentials.username, credentials.password);
+      return await authService.login(
+        credentials.username,
+        credentials.password
+      );
     } catch (err) {
       return rejectWithValue((err as Error).message);
     }
@@ -73,12 +94,12 @@ export const registerThunk = createAsyncThunk(
 // ── Slice ─────────────────────────────────────────────────────────────────────
 
 const authSlice = createSlice({
-  name: 'auth',
+  name: "auth",
   initialState,
   reducers: {
     /** Clear all auth state and remove persisted session from localStorage */
     logoutAction(state) {
-      state.user  = null;
+      state.user = null;
       state.token = null;
       state.error = null;
       localStorage.removeItem(TOKEN_KEY);
@@ -90,36 +111,45 @@ const authSlice = createSlice({
     builder
       .addCase(loginThunk.pending, (state) => {
         state.isLoading = true;
-        state.error     = null;
+        state.error = null;
       })
       .addCase(loginThunk.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.token     = action.payload.token;
-        state.user      = action.payload.user;
+        state.token = action.payload.token;
+        state.user = action.payload.user;
         localStorage.setItem(TOKEN_KEY, action.payload.token);
-        localStorage.setItem(USER_KEY,  JSON.stringify(action.payload.user));
+        localStorage.setItem(USER_KEY, JSON.stringify(action.payload.user));
       })
       .addCase(loginThunk.rejected, (state, action) => {
         state.isLoading = false;
-        state.error     = action.payload as string;
+        state.error = action.payload as string;
+      });
+
+    // ── updateUsernameThunk ──
+    builder
+      .addCase(updateUsernameThunk.fulfilled, (state, action) => {
+        if (state.user) {
+          state.user = { ...state.user, username: action.payload.username };
+          localStorage.setItem(USER_KEY, JSON.stringify(state.user));
+        }
       });
 
     // ── registerThunk (shares fulfilled/rejected shape with loginThunk) ──
     builder
       .addCase(registerThunk.pending, (state) => {
         state.isLoading = true;
-        state.error     = null;
+        state.error = null;
       })
       .addCase(registerThunk.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.token     = action.payload.token;
-        state.user      = action.payload.user;
+        state.token = action.payload.token;
+        state.user = action.payload.user;
         localStorage.setItem(TOKEN_KEY, action.payload.token);
-        localStorage.setItem(USER_KEY,  JSON.stringify(action.payload.user));
+        localStorage.setItem(USER_KEY, JSON.stringify(action.payload.user));
       })
       .addCase(registerThunk.rejected, (state, action) => {
         state.isLoading = false;
-        state.error     = action.payload as string;
+        state.error = action.payload as string;
       });
   },
 });

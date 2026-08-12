@@ -1,22 +1,22 @@
-import axios from 'axios';
+import axios from "axios";
 
 /**
- * Pre-configured Axios instance for the QIT API.
+ * Pre-configured Axios instance for the QualyTrack API.
  *
  * baseURL is /api — the Vite dev proxy forwards this to http://localhost:3001/api,
  * so there are no CORS issues in development. In production, the reverse proxy
  * (nginx / cloud run) handles the same routing.
  */
 const api = axios.create({
-  baseURL: '/api',
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: "/api",
+  headers: { "Content-Type": "application/json" },
 });
 
 // ── Request interceptor ───────────────────────────────────────────────────────
 // Attach the JWT stored in localStorage to every outgoing request.
 // The token is written to localStorage by the login flow.
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('qit_token');
+  const token = localStorage.getItem("qualytrack_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -26,13 +26,19 @@ api.interceptors.request.use((config) => {
 // ── Response interceptor ──────────────────────────────────────────────────────
 // On 401 (token expired / invalid), wipe local auth state and redirect to
 // /login so the user is never stuck in a broken authenticated state.
+// Auth endpoints (/auth/login, /auth/register) are excluded — a 401 there
+// just means wrong credentials, not an expired session, so we let the caller
+// handle it rather than triggering a full page reload.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('qit_token');
-      localStorage.removeItem('qit_user');
-      window.location.href = '/login';
+    const isAuthEndpoint = (error.config?.url as string | undefined)?.includes(
+      "/auth/"
+    );
+    if (error.response?.status === 401 && !isAuthEndpoint) {
+      localStorage.removeItem("qualytrack_token");
+      localStorage.removeItem("qualytrack_user");
+      window.location.href = "/login";
     }
     return Promise.reject(error);
   }

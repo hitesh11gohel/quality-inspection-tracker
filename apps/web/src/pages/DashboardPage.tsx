@@ -1,9 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useOpenLogDialog } from "@/lib/LogDialogContext";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { fetchInspections } from "@/store/slices/inspectionsSlice";
+import { fetchInspections, setFilters } from "@/store/slices/inspectionsSlice";
 import { fetchSummary } from "@/store/slices/summarySlice";
 import type { Severity, Status } from "@qit/shared";
 import {
@@ -12,11 +13,12 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  Plus,
   PlusCircle,
   TrendingUp,
 } from "lucide-react";
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -88,6 +90,7 @@ interface KpiCardProps {
   iconFg: string;
   valueFg: string;
   loading: boolean;
+  onClick?: () => void;
 }
 
 function KpiCard({
@@ -100,12 +103,15 @@ function KpiCard({
   iconFg,
   valueFg,
   loading,
+  onClick,
 }: KpiCardProps) {
   return (
     <div
+      onClick={onClick}
       className={cn(
-        "rounded-xl border border-t-4 bg-card px-4 py-3.5 shadow-sm",
-        topBorder
+        "rounded-xl border border-t-4 bg-card px-4 py-3.5 shadow-sm transition-shadow",
+        topBorder,
+        onClick && "cursor-pointer hover:shadow-md active:scale-[0.99]"
       )}
     >
       {/* Label + icon */}
@@ -146,11 +152,31 @@ function KpiCard({
 
 export default function DashboardPage() {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const user = useAppSelector((s) => s.auth.user);
+  const openLogDialog = useOpenLogDialog();
   const { stats, isLoading: summaryLoading } = useAppSelector((s) => s.summary);
   const { items: recentItems, isLoading: listLoading } = useAppSelector(
     (s) => s.inspections
   );
+
+  const goToInspections = (
+    filter: { status?: Status; severity?: Severity } = {}
+  ) => {
+    dispatch(
+      setFilters({
+        search: undefined,
+        severity: undefined,
+        status: undefined,
+        dateFrom: undefined,
+        dateTo: undefined,
+        sortBy: undefined,
+        sortOrder: undefined,
+        ...filter,
+      })
+    );
+    navigate("/inspections");
+  };
 
   useEffect(() => {
     dispatch(fetchSummary());
@@ -173,11 +199,9 @@ export default function DashboardPage() {
             Log your first one to see stats here.
           </p>
         </div>
-        <Button asChild size="sm">
-          <Link to="/log">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Log Inspection
-          </Link>
+        <Button size="sm" onClick={openLogDialog}>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Log Inspection
         </Button>
       </div>
     );
@@ -204,11 +228,13 @@ export default function DashboardPage() {
             {formatFullDate(new Date())}
           </p>
         </div>
-        <Button asChild size="sm" className="hidden shrink-0 sm:flex">
-          <Link to="/log">
-            <PlusCircle className="mr-1.5 h-4 w-4" />
-            Log Inspection
-          </Link>
+        <Button
+          size="sm"
+          className="hidden shrink-0 sm:flex"
+          onClick={openLogDialog}
+        >
+          <PlusCircle className="mr-1.5 h-4 w-4" />
+          Log Inspection
         </Button>
       </div>
 
@@ -241,6 +267,7 @@ export default function DashboardPage() {
           iconFg="text-slate-600"
           valueFg="text-foreground"
           loading={summaryLoading}
+          onClick={() => goToInspections()}
         />
         <KpiCard
           label="Open"
@@ -252,6 +279,7 @@ export default function DashboardPage() {
           iconFg="text-amber-600"
           valueFg="text-amber-600"
           loading={summaryLoading}
+          onClick={() => goToInspections({ status: "Open" })}
         />
         <KpiCard
           label="Resolved"
@@ -263,6 +291,7 @@ export default function DashboardPage() {
           iconFg="text-green-600"
           valueFg="text-green-600"
           loading={summaryLoading}
+          onClick={() => goToInspections({ status: "Resolved" })}
         />
         <KpiCard
           label="Resolution Rate"
@@ -274,6 +303,7 @@ export default function DashboardPage() {
           iconFg="text-blue-600"
           valueFg="text-blue-600"
           loading={summaryLoading}
+          onClick={() => goToInspections({ status: "Resolved" })}
         />
       </div>
 
@@ -444,6 +474,16 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ── Mobile FAB ───────────────────────────────────────────────────── */}
+      <button
+        type="button"
+        onClick={openLogDialog}
+        aria-label="Log new inspection"
+        className="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 sm:hidden"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
     </div>
   );
 }
