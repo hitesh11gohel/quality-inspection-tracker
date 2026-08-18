@@ -1,0 +1,33 @@
+services:
+  - name: qualytrack-api
+    type: web
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: corepack enable && corepack prepare pnpm@9.0.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @qit/shared build && pnpm --filter @qit/api build
+    startCommand: pnpm --filter @qit/api start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_PATH
+        value: ./data/qualytrack.db
+      - key: ALLOWED_ORIGINS
+        sync: false # set after qualytrack-web is created, e.g. https://qualytrack-web.onrender.com
+
+  - name: qualytrack-web
+    type: web
+    runtime: static
+    buildCommand: corepack enable && corepack prepare pnpm@9.0.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @qit/shared build && pnpm --filter @qit/web build
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: VITE_API_URL
+        sync: false # set after qualytrack-api is created, e.g. https://qualytrack-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

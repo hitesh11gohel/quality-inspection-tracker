@@ -4,6 +4,23 @@ A full-stack monorepo application for logging, tracking, and resolving fabric-pr
 
 ---
 
+## Live Demo
+
+Deployed on [Render](https://render.com):
+
+| Service  | URL                                          |
+|----------|-----------------------------------------------|
+| Frontend | https://qualytrack-web.onrender.com            |
+| API      | https://qualytrack-api.onrender.com/health     |
+
+Sign in with the demo account below, or register your own.
+
+> **Note:** both services run on Render's free tier. The API spins down after 15 minutes of inactivity, so the first request after a period of idle time can take 30–50 seconds to wake up. The database is also ephemeral on this tier — it reseeds automatically on every restart/redeploy, so any inspections you log may not persist between sessions.
+
+Deployment is defined as code in [`render.yaml`](./render.yaml) (a Render Blueprint) — pushing to `main` re-provisions both services from that file.
+
+---
+
 ## Quick Start (< 5 minutes)
 
 ### Prerequisites
@@ -21,8 +38,8 @@ cd quality-inspection-tracker
 # 2. Install all workspace dependencies
 pnpm install
 
-# 3. Configure the API environment
-cp apps/api/.env.example apps/api/.env
+# 3. Configure the API environment (Optional)
+use `apps/api/.env.example` file and create `apps/api/.env` in same place
 # Edit apps/api/.env if you want a custom JWT secret or DB path (defaults work fine for local dev)
 
 # 4. Start both servers (frontend + backend) in parallel

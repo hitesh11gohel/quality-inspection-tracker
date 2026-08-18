@@ -5,6 +5,7 @@ import { LogDialogContext } from "@/lib/LogDialogContext";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { logoutAction } from "@/store/slices/authSlice";
+import { fetchInspections, setFilters } from "@/store/slices/inspectionsSlice";
 import { ClipboardList, LayoutDashboard, LogOut, Plus, Scissors, ShieldCheck, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
@@ -51,6 +52,29 @@ export default function AppLayout() {
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + "/");
+
+  // The bottom-nav "Inspections" tab always means "show everything" — reset any
+  // filters left over from a KPI-card deep link or from filtering within the
+  // page itself. Back buttons on sub-pages intentionally skip this so they
+  // return to the filtered list the user came from.
+  const resetInspectionFilters = () => {
+    dispatch(
+      setFilters({
+        search: undefined,
+        severity: undefined,
+        status: undefined,
+        dateFrom: undefined,
+        dateTo: undefined,
+        sortBy: undefined,
+        sortOrder: undefined,
+      })
+    );
+    // Already on /inspections — the page won't remount to pick up the reset
+    // filters on its own, so force a refetch with them here.
+    if (isActive("/inspections")) {
+      dispatch(fetchInspections({ page: 1 }));
+    }
+  };
 
   const userInitials = user ? initials(user.username) : "?";
 
@@ -192,6 +216,7 @@ export default function AppLayout() {
 
           <Link
             to="/inspections"
+            onClick={resetInspectionFilters}
             className={cn(
               "flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
               isActive("/inspections") ? "text-primary" : "text-muted-foreground hover:text-foreground"

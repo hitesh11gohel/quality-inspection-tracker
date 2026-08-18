@@ -10,6 +10,7 @@ import RegisterPage from "@/pages/auth/RegisterPage";
 import DashboardPage from "@/pages/DashboardPage";
 import InspectionDetailPage from "@/pages/InspectionDetailPage";
 import InspectionsPage from "@/pages/InspectionsPage";
+import NotFoundPage from "@/pages/NotFoundPage";
 import ProfilePage from "@/pages/ProfilePage";
 import ManageUsersPage from "@/pages/admin/ManageUsersPage";
 
@@ -44,7 +45,7 @@ export default function App() {
                 </AdminRoute>
               }
             />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Route>
       </Routes>

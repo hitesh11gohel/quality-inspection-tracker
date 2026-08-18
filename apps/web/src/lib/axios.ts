@@ -3,12 +3,14 @@ import axios from "axios";
 /**
  * Pre-configured Axios instance for the QualyTrack API.
  *
- * baseURL is /api — the Vite dev proxy forwards this to http://localhost:3001/api,
- * so there are no CORS issues in development. In production, the reverse proxy
- * (nginx / cloud run) handles the same routing.
+ * When VITE_API_URL is unset, baseURL is /api — the Vite dev proxy forwards
+ * this to http://localhost:3001/api, so there are no CORS issues in
+ * development. When VITE_API_URL is set (e.g. on Render, where the frontend
+ * and API are separate services with different origins), requests go
+ * straight to that origin's /api.
  */
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: `${import.meta.env.VITE_API_URL ?? ""}/api`,
   headers: { "Content-Type": "application/json" },
 });
 

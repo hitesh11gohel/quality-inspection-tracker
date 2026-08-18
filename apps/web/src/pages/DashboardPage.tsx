@@ -378,7 +378,7 @@ export default function DashboardPage() {
                   >
                     {inspection.status}
                   </Badge>
-                  <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                  <span className="shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
                     {shortDate(inspection.date)}
                   </span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/30 transition-transform group-hover:translate-x-0.5" />
